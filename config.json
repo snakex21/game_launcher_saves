@@ -1,0 +1,37 @@
+{
+    "games": {
+        "High on Life": {
+            "exe_path": "E:/2022/High on Life/Oregon.exe",
+            "save_path": "C:/Users/ASRock/AppData/Local/Oregon",
+            "cover_image": "images\\High on Life_cover.jpg",
+            "play_time": 124.44002985954285,
+            "completion": 2,
+            "last_played": 1729981414.5806231,
+            "play_sessions": [
+                {
+                    "start": 1729981397.2003136,
+                    "end": 1729981405.2443986
+                },
+                {
+                    "start": 1729981414.5806231,
+                    "end": 1729981530.976568
+                }
+            ]
+        },
+        "Red Dead Redemption 2": {
+            "exe_path": "E:/2019/Red Dead Redemption 2/Launcher.exe",
+            "save_path": "C:/Users/ASRock/AppData/Roaming/.1911/Red Dead Redemption 2",
+            "cover_image": "images\\Red Dead Redemption 2_cover.jpg",
+            "last_played": null,
+            "play_time": 0
+        }
+    },
+    "settings": {
+        "cloud_service_google_drive": false,
+        "cloud_service_github": true
+    },
+    "groups": {},
+    "user": {
+        "username": "Maks"
+    }
+}
