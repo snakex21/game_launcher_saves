@@ -24,6 +24,42 @@
             "cover_image": "images\\Red Dead Redemption 2_cover.jpg",
             "last_played": null,
             "play_time": 0
+        },
+        "Doom Ethernal": {
+            "exe_path": "E:/2020/DOOM Eternal/DOOMEternalx64vk.exe",
+            "save_path": "C:/Users/Public/Documents/Steam/RUNE/782330",
+            "cover_image": "images\\Doom Ethernal_cover.jpg",
+            "last_played": 1729985258.4324636,
+            "play_time": 6.032302141189575,
+            "play_sessions": [
+                {
+                    "start": 1729984876.0574949,
+                    "end": 1729984878.068635
+                },
+                {
+                    "start": 1729984902.238558,
+                    "end": 1729984903.246558
+                },
+                {
+                    "start": 1729985258.4324636,
+                    "end": 1729985261.4456258
+                }
+            ],
+            "completion": 0
+        },
+        "Mafia Definitive Edition": {
+            "exe_path": "E:/2020/Mafia - Definitive Edition/mafiadefinitiveedition.exe",
+            "save_path": "C:/Users/ASRock/Documents/My Games/Mafia Definitive Edition",
+            "cover_image": "images\\Mafia Definitive Edition_cover.jpg",
+            "last_played": 1729985572.3282468,
+            "play_time": 362.32039880752563,
+            "play_sessions": [
+                {
+                    "start": 1729985572.3282468,
+                    "end": 1729985934.6486456
+                }
+            ],
+            "completion": 1
         }
     },
     "settings": {
