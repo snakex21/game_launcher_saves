@@ -4,9 +4,9 @@
             "exe_path": "E:/2022/High on Life/Oregon.exe",
             "save_path": "C:/Users/ASRock/AppData/Local/Oregon",
             "cover_image": "images\\High on Life_cover.jpg",
-            "play_time": 146.54381251335144,
+            "play_time": 176.70103883743286,
             "completion": 2,
-            "last_played": 1730032321.082512,
+            "last_played": 1730050390.134902,
             "play_sessions": [
                 {
                     "start": 1729981397.2003136,
@@ -19,6 +19,14 @@
                 {
                     "start": 1730032321.082512,
                     "end": 1730032343.1862946
+                },
+                {
+                    "start": 1730043264.5348573,
+                    "end": 1730043269.5598896
+                },
+                {
+                    "start": 1730043387.6477325,
+                    "end": 1730043412.7799265
                 }
             ]
         },
@@ -27,14 +35,16 @@
             "save_path": "C:/Users/ASRock/AppData/Roaming/.1911/Red Dead Redemption 2",
             "cover_image": "images\\Red Dead Redemption 2_cover.jpg",
             "last_played": null,
-            "play_time": 0
+            "play_time": 0,
+            "completion": 0,
+            "play_sessions": []
         },
         "Doom Ethernal": {
             "exe_path": "E:/2020/DOOM Eternal/DOOMEternalx64vk.exe",
             "save_path": "C:/Users/Public/Documents/Steam/RUNE/782330",
             "cover_image": "images\\Doom Ethernal_cover.jpg",
-            "last_played": 1729985258.4324636,
-            "play_time": 6.032302141189575,
+            "last_played": 1730043542.0469358,
+            "play_time": 8.045593738555908,
             "play_sessions": [
                 {
                     "start": 1729984876.0574949,
@@ -47,6 +57,10 @@
                 {
                     "start": 1729985258.4324636,
                     "end": 1729985261.4456258
+                },
+                {
+                    "start": 1730043542.0469358,
+                    "end": 1730043544.0602274
                 }
             ],
             "completion": 0
@@ -68,13 +82,33 @@
                 }
             ],
             "completion": 1
+        },
+        "Deluxe Ski Jumping 4": {
+            "exe_path": "C:/Programy/Deluxe Ski Jump 4/DSJ4.exe",
+            "save_path": "C:/Users/ASRock/Documents/Deluxe Ski Jump 4",
+            "cover_image": "images\\Deluxe Ski Jumping 4_cover.png",
+            "discord_image_key": "",
+            "tags": [
+                "Skoki Narciarskie"
+            ],
+            "rating": null,
+            "date_added": 1730049024.6726263,
+            "play_time": 8.031504154205322,
+            "completion": 0,
+            "last_played": 1730047522.822404,
+            "play_sessions": [
+                {
+                    "start": 1730047522.8254066,
+                    "end": 1730047530.8569107
+                }
+            ]
         }
     },
     "settings": {
         "cloud_service_google_drive": false,
         "cloud_service_github": true,
-        "theme": "Blue",
-        "background_image": "C:/Users/ASRock/Downloads/Diesel_productv2_mafia-definitive-edition_home_EGS_MafiaDefinitiveEditionPreOrder_Hangar13_G1A_00-1920x1080-e7457132d8ebeb06c2d663944087c683e4834918.jpg"
+        "theme": "Dark",
+        "background_image": "C:/Users/ASRock/Downloads/fin_Hautamaeki.jpg"
     },
     "groups": {},
     "user": {
