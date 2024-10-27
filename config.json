@@ -4,9 +4,9 @@
             "exe_path": "E:/2022/High on Life/Oregon.exe",
             "save_path": "C:/Users/ASRock/AppData/Local/Oregon",
             "cover_image": "images\\High on Life_cover.jpg",
-            "play_time": 124.44002985954285,
+            "play_time": 146.54381251335144,
             "completion": 2,
-            "last_played": 1729981414.5806231,
+            "last_played": 1730032321.082512,
             "play_sessions": [
                 {
                     "start": 1729981397.2003136,
@@ -15,6 +15,10 @@
                 {
                     "start": 1729981414.5806231,
                     "end": 1729981530.976568
+                },
+                {
+                    "start": 1730032321.082512,
+                    "end": 1730032343.1862946
                 }
             ]
         },
@@ -51,12 +55,16 @@
             "exe_path": "E:/2020/Mafia - Definitive Edition/mafiadefinitiveedition.exe",
             "save_path": "C:/Users/ASRock/Documents/My Games/Mafia Definitive Edition",
             "cover_image": "images\\Mafia Definitive Edition_cover.jpg",
-            "last_played": 1729985572.3282468,
-            "play_time": 362.32039880752563,
+            "last_played": 1730033090.213938,
+            "play_time": 393.4245059490204,
             "play_sessions": [
                 {
                     "start": 1729985572.3282468,
                     "end": 1729985934.6486456
+                },
+                {
+                    "start": 1730033090.2149384,
+                    "end": 1730033121.3190455
                 }
             ],
             "completion": 1
@@ -64,10 +72,13 @@
     },
     "settings": {
         "cloud_service_google_drive": false,
-        "cloud_service_github": true
+        "cloud_service_github": true,
+        "theme": "Blue",
+        "background_image": "C:/Users/ASRock/Downloads/Diesel_productv2_mafia-definitive-edition_home_EGS_MafiaDefinitiveEditionPreOrder_Hangar13_G1A_00-1920x1080-e7457132d8ebeb06c2d663944087c683e4834918.jpg"
     },
     "groups": {},
     "user": {
-        "username": "Maks"
+        "username": "Maks",
+        "avatar": "C:/Users/ASRock/Downloads/fin_Hautamaeki.jpg"
     }
 }
