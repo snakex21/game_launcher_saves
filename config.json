@@ -30,41 +30,6 @@
                 }
             ]
         },
-        "Red Dead Redemption 2": {
-            "exe_path": "E:/2019/Red Dead Redemption 2/Launcher.exe",
-            "save_path": "C:/Users/ASRock/AppData/Roaming/.1911/Red Dead Redemption 2",
-            "cover_image": "images\\Red Dead Redemption 2_cover.jpg",
-            "last_played": null,
-            "play_time": 0,
-            "completion": 0,
-            "play_sessions": []
-        },
-        "Doom Ethernal": {
-            "exe_path": "E:/2020/DOOM Eternal/DOOMEternalx64vk.exe",
-            "save_path": "C:/Users/Public/Documents/Steam/RUNE/782330",
-            "cover_image": "images\\Doom Ethernal_cover.jpg",
-            "last_played": 1730043542.0469358,
-            "play_time": 8.045593738555908,
-            "play_sessions": [
-                {
-                    "start": 1729984876.0574949,
-                    "end": 1729984878.068635
-                },
-                {
-                    "start": 1729984902.238558,
-                    "end": 1729984903.246558
-                },
-                {
-                    "start": 1729985258.4324636,
-                    "end": 1729985261.4456258
-                },
-                {
-                    "start": 1730043542.0469358,
-                    "end": 1730043544.0602274
-                }
-            ],
-            "completion": 0
-        },
         "Mafia Definitive Edition": {
             "exe_path": "E:/2020/Mafia - Definitive Edition/mafiadefinitiveedition.exe",
             "save_path": "C:/Users/ASRock/Documents/My Games/Mafia Definitive Edition",
@@ -87,12 +52,10 @@
             "exe_path": "C:/Programy/Deluxe Ski Jump 4/DSJ4.exe",
             "save_path": "C:/Users/ASRock/Documents/Deluxe Ski Jump 4",
             "cover_image": "images\\Deluxe Ski Jumping 4_cover.png",
-            "discord_image_key": "",
-            "tags": [
-                "Skoki Narciarskie"
+            "genres": [
+                "Sporty"
             ],
             "rating": null,
-            "date_added": 1730049024.6726263,
             "play_time": 8.031504154205322,
             "completion": 0,
             "last_played": 1730047522.822404,
@@ -102,13 +65,38 @@
                     "end": 1730047530.8569107
                 }
             ]
+        },
+        "Red Dead Redemption 2": {
+            "exe_path": "E:/2019/Red Dead Redemption 2/Launcher.exe",
+            "save_path": "C:/Users/ASRock/AppData/Roaming/.1911/Red Dead Redemption 2",
+            "cover_image": "images\\Red Dead Redemption 2_cover.jpg",
+            "genres": [],
+            "rating": 8.0
+        },
+        "Doom Ethernal": {
+            "exe_path": "E:/2020/DOOM Eternal/DOOMEternalx64vk.exe",
+            "save_path": "C:/Users/Public/Documents/Steam/RUNE/782330",
+            "cover_image": "images\\Doom Ethernal_cover.jpg",
+            "genres": [
+                "Strzelanki"
+            ],
+            "rating": 10.0,
+            "play_time": 0,
+            "completion": 0,
+            "last_played": null,
+            "play_sessions": []
         }
     },
     "settings": {
         "cloud_service_google_drive": false,
         "cloud_service_github": true,
         "theme": "Dark",
-        "background_image": "C:/Users/ASRock/Downloads/fin_Hautamaeki.jpg"
+        "background_image": "C:/Users/ASRock/Downloads/fin_Hautamaeki.jpg",
+        "custom_genres": [
+            "Sporty",
+            "RPG",
+            "Strzelanki"
+        ]
     },
     "groups": {},
     "user": {
