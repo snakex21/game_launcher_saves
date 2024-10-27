@@ -1,0 +1,1605 @@
+import os
+import sys
+import shutil
+import json
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk, simpledialog
+from PIL import Image, ImageTk, ImageDraw, ImageFont
+import time
+import threading
+import psutil
+import winreg
+import random
+import queue
+
+try:
+    resampling = Image.Resampling.LANCZOS
+except AttributeError:
+    resampling = Image.LANCZOS  # Dla starszych wersji Pillow
+
+# Plik do przechowywania danych
+CONFIG_FILE = "config.json"
+GAMES_FOLDER = "games_saves"
+IMAGES_FOLDER = "images"
+LOCAL_SETTINGS_FILE = "local_settings.json"
+THEMES = {
+    'Dark': {
+        'background': '#1e1e1e',
+        'foreground': 'white',
+        'button_background': '#2e2e2e',
+        'button_foreground': 'white'
+    },
+    'Light': {
+        'background': 'white',
+        'foreground': 'black',
+        'button_background': '#f0f0f0',
+        'button_foreground': 'black'
+    },
+    'Blue': {
+        'background': '#1e1e2e',
+        'foreground': 'white',
+        'button_background': '#2e2e3e',
+        'button_foreground': 'white'
+    },
+    # Dodaj więcej motywów według uznania
+}
+
+def load_local_settings():
+    if os.path.exists(LOCAL_SETTINGS_FILE):
+        with open(LOCAL_SETTINGS_FILE, "r", encoding="utf-8") as file:
+            return json.load(file)
+    return {}
+
+def save_local_settings(data):
+    with open(LOCAL_SETTINGS_FILE, "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=4, ensure_ascii=False)
+
+# Utworzenie folderów, jeśli nie istnieją
+os.makedirs(GAMES_FOLDER, exist_ok=True)
+os.makedirs(IMAGES_FOLDER, exist_ok=True)
+
+# Wczytanie istniejących danych lub utworzenie nowego pliku, jeśli nie istnieje
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as file:
+            return json.load(file)
+    return {"games": {}, "settings": {}, "groups": {}, "user": {}}
+
+def save_config(data):
+    data_copy = data.copy()
+    data_copy.get("settings", {}).pop("github_token", None)
+    with open(CONFIG_FILE, "w", encoding="utf-8") as file:
+        json.dump(data_copy, file, indent=4, ensure_ascii=False)
+
+def create_default_cover(game_name, size=(200, 300)):
+    # Tworzenie prostego obrazka z nazwą gry
+    image = Image.new('RGB', size, color='#1e1e1e')
+    draw = ImageDraw.Draw(image)
+    try:
+        # Maksymalny rozmiar czcionki
+        max_font_size = 48
+        font_size = max_font_size
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        font = ImageFont.load_default()
+        font_size = 10  # Domyślny rozmiar dla wbudowanej czcionki
+
+    # Dostosowanie rozmiaru czcionki, aby tekst zmieścił się na okładce
+    while True:
+        try:
+            bbox = draw.textbbox((0, 0), game_name, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        except AttributeError:
+            # Dla starszych wersji Pillow
+            text_width, text_height = draw.textsize(game_name, font=font)
+
+        if text_width <= size[0] - 20 or font_size <= 10:
+            break
+        font_size -= 2
+        font = ImageFont.truetype("arial.ttf", font_size)
+
+    # Dzielimy nazwę gry na kilka linii, jeśli jest za długa
+    words = game_name.split()
+    lines = []
+    line = ""
+    for word in words:
+        test_line = f"{line} {word}".strip()
+        try:
+            bbox = draw.textbbox((0, 0), test_line, font=font)
+            w = bbox[2] - bbox[0]
+        except AttributeError:
+            w, h = draw.textsize(test_line, font=font)
+        if w <= size[0] - 20:
+            line = test_line
+        else:
+            lines.append(line)
+            line = word
+    lines.append(line)
+
+    total_text_height = len(lines) * text_height
+    text_y = (size[1] - total_text_height) // 2
+
+    for line in lines:
+        try:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            w = bbox[2] - bbox[0]
+        except AttributeError:
+            w, h = draw.textsize(line, font=font)
+        text_x = (size[0] - w) // 2
+        draw.text((text_x, text_y), line, fill='white', font=font)
+        text_y += text_height
+
+    image_path = os.path.join(IMAGES_FOLDER, f"{game_name}.png")
+    image.save(image_path)
+    return image_path
+
+class GameLauncher:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Game Launcher")
+        self.root.configure(bg="#1e1e1e")
+        self.root.geometry("1024x768")
+        self.root.minsize(800, 600)
+
+        # Konfiguracja siatki w self.root
+        self.root.rowconfigure(0, weight=1)
+        self.root.columnconfigure(0, weight=0)  # Sidebar
+        self.root.columnconfigure(1, weight=1)  # Główna zawartość
+
+        # Sidebar
+        self.sidebar = ttk.Frame(self.root, width=200)
+        self.sidebar.grid(row=0, column=0, sticky="ns")
+        self.sidebar.grid_propagate(False)
+        self.create_sidebar()
+
+        # Home Frame (podłączony do self.root)
+        self.home_frame = tk.Frame(self.root, bg="#1e1e1e")
+        self.home_frame.grid(row=0, column=1, sticky="nsew")
+        self.home_frame.columnconfigure(0, weight=1)
+        self.home_frame.rowconfigure(1, weight=1)
+
+        # Main Frame (podłączony do self.root)
+        self.main_frame = tk.Frame(self.root, bg="#1e1e1e")
+        self.main_frame.grid(row=0, column=1, sticky="nsew")
+        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.rowconfigure(1, weight=1)
+
+        # Stylizacja
+        style = ttk.Style(self.root)
+        style.theme_use('clam')
+        style.configure("TFrame", background="#1e1e1e")
+        style.configure("TLabel", background="#1e1e1e", foreground="white")
+        style.configure("TButton", background="#2e2e2e", foreground="white", padding=6)
+        style.configure("Game.TButton", background="#1e1e1e", foreground="white", padding=0, borderwidth=0)
+        style.map("Game.TButton",
+                  background=[('active', '#1e1e1e')],
+                  borderwidth=[('active', 0)])
+        style.configure("TEntry", fieldbackground="#2e2e2e", background="#2e2e2e", foreground="white")
+        style.configure("TScrollbar", background="#2e2e2e", troughcolor="#1e1e1e", arrowcolor="white")
+
+        style.configure("Green.TButton", background="green", foreground="white")
+        style.configure("Red.TButton", background="red", foreground="white")
+
+        # Załadowanie konfiguracji
+        self.config = load_config()
+        self.settings = self.config.setdefault("settings", {})
+        self.games = self.config.setdefault("games", {})
+        self.groups = self.config.setdefault("groups", {})
+        self.user = self.config.setdefault("user", {})
+        self.local_settings = load_local_settings()
+        self.progress_queue = queue.Queue()
+
+        # Zastosowanie motywu
+        self.apply_theme(THEMES.get(self.settings.get("theme", "Dark")))
+
+        # Zapytaj o nazwę użytkownika, jeśli nie jest ustawiona
+        if not self.user.get("username"):
+            self.ask_for_username()
+
+        # Tworzenie strony głównej i innych elementów
+        self.create_home_page()  # Wywołanie po zdefiniowaniu self.user
+        self.create_header()
+        self.create_game_grid()
+        self.update_close_buttons()
+        self.show_home()
+
+        # Opcja przełączania trybu pełnoekranowego
+        self.fullscreen_var = tk.BooleanVar(value=False)
+        fullscreen_btn = ttk.Checkbutton(self.sidebar, text="Tryb Pełnoekranowy", variable=self.fullscreen_var, command=self.toggle_fullscreen)
+        fullscreen_btn.pack(pady=5)
+        style.configure('TLabel', font=('Helvetica', 18))
+        style.configure('TButton', font=('Helvetica', 18))
+
+    # Definicje metod klasy GameLauncher
+    def toggle_fullscreen(self):
+        if self.fullscreen_var.get():
+            self.root.attributes('-fullscreen', True)
+        else:
+            self.root.attributes('-fullscreen', False)
+
+    def ask_for_username(self):
+        username = simpledialog.askstring("Nazwa Użytkownika", "Podaj swoją nazwę użytkownika:")
+        if username:
+            self.user["username"] = username
+        else:
+            self.user["username"] = "Gracz"
+        save_config(self.config)
+
+    def create_widgets(self, game_name, game_data):
+        # Nagłówek
+        ttk.Label(self.top, text="Dodaj/Edytuj Grę", font=("Helvetica", 14)).pack(pady=10)
+        
+        # Pole Nazwa Gry
+        ttk.Label(self.top, text="Nazwa Gry:").pack(pady=5)
+        self.name_entry = ttk.Entry(self.top)
+        self.name_entry.pack(pady=5)
+        if game_name:
+            self.name_entry.insert(0, game_name)
+        
+        # Pole Ścieżka do pliku wykonywalnego
+        ttk.Label(self.top, text="Ścieżka do pliku wykonywalnego:").pack(pady=5)
+        self.exe_entry = ttk.Entry(self.top)
+        self.exe_entry.pack(pady=5)
+        if game_data and 'exe_path' in game_data:
+            self.exe_entry.insert(0, game_data['exe_path'])
+        exe_button = ttk.Button(self.top, text="Wybierz...", command=self.select_exe)
+        exe_button.pack(pady=5)
+
+    def select_exe(self):
+        path = filedialog.askopenfilename(filetypes=[("Pliki wykonywalne", "*.exe")])
+        if path:
+            self.exe_entry.delete(0, tk.END)
+            self.exe_entry.insert(0, path)
+
+
+    def toggle_fullscreen(self):
+        if self.fullscreen_var.get():
+            self.root.attributes('-fullscreen', True)
+        else:
+            self.root.attributes('-fullscreen', False)
+
+
+    def ask_for_username(self):
+        username = simpledialog.askstring("Nazwa Użytkownika", "Podaj swoją nazwę użytkownika:")
+        if username:
+            self.user["username"] = username
+        else:
+            self.user["username"] = "Gracz"
+        save_config(self.config)
+
+    def create_sidebar(self):
+        ttk.Label(self.sidebar, text="Game Launcher", font=("Helvetica", 16, "bold")).pack(pady=20)
+
+        self.btn_home = ttk.Button(self.sidebar, text="Strona Główna", command=self.show_home)
+        self.btn_home.pack(fill="x", padx=20, pady=5)
+
+        self.btn_library = ttk.Button(self.sidebar, text="Biblioteka", command=self.show_library)
+        self.btn_library.pack(fill="x", padx=20, pady=5)
+
+        self.btn_settings = ttk.Button(self.sidebar, text="Ustawienia", command=self.show_settings)
+        self.btn_settings.pack(fill="x", padx=20, pady=5)
+
+        self.btn_exit = ttk.Button(self.sidebar, text="Wyjście", command=self.root.quit)
+        self.btn_exit.pack(fill="x", padx=20, pady=5)
+
+    def create_header(self):
+        self.search_var = tk.StringVar()
+        self.search_var.trace("w", self.update_game_grid)
+
+        ttk.Label(self.header, text="Biblioteka", font=("Helvetica", 14)).grid(row=0, column=0, padx=10, pady=10)
+
+        self.search_entry = ttk.Entry(self.header, textvariable=self.search_var)
+        self.search_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+
+        self.add_game_btn = ttk.Button(self.header, text="Dodaj Grę", command=self.add_game)
+        self.add_game_btn.grid(row=0, column=2, padx=10, pady=10)
+
+        self.group_var = tk.StringVar(value="Wszystkie Gry")
+        groups = ["Wszystkie Gry"] + list(self.groups.keys())
+        self.group_menu = ttk.OptionMenu(self.header, self.group_var, self.group_var.get(), *groups, command=self.update_game_grid)
+        self.group_menu.grid(row=0, column=3, padx=10, pady=10)
+
+        self.add_group_btn = ttk.Button(self.header, text="Dodaj Grupę", command=self.add_group)
+        self.add_group_btn.grid(row=0, column=4, padx=10, pady=10)
+
+        self.header.columnconfigure(1, weight=1)
+
+    def upload_to_cloud(self):
+        services = []
+        if self.settings.get("cloud_service_google_drive"):
+            services.append("Google Drive")
+        if self.settings.get("cloud_service_github"):
+            services.append("GitHub")
+        if not services:
+            messagebox.showwarning("Błąd", "Nie wybrano żadnej usługi chmurowej.")
+            return
+
+        # Uruchom operacje w osobnym wątku
+        threading.Thread(target=self.upload_to_cloud_thread, args=(services,), daemon=True).start()
+
+    def upload_to_cloud_thread(self, services):
+        for service in services:
+            if service == "Google Drive":
+                self.do_upload_to_google_drive()
+            elif service == "GitHub":
+                self.do_upload_to_github()
+        # Wskaźnik zakończenia
+        self.progress_queue.put("DONE")
+
+    def controller_listener(self):
+        while True:
+            try:
+                events = get_gamepad()
+                for event in events:
+                    # Przetwarzaj zdarzenia z kontrolera
+                    if event.code == 'ABS_Y':
+                        if event.state < 0:
+                            self.root.event_generate('<Up>')
+                        elif event.state > 0:
+                            self.root.event_generate('<Down>')
+                    elif event.code == 'BTN_SOUTH' and event.state == 1:
+                        self.root.event_generate('<Return>')
+            except (IndexError, IOError) as e:
+                # Brak podłączonego gamepada lub inny błąd wejścia/wyjścia
+                time.sleep(1)
+                continue
+            except Exception as e:
+                print(f"Wyjątek w controller_listener: {e}")
+                time.sleep(1)
+            time.sleep(0.01)
+
+
+
+    def create_home_page(self):
+        # Wyczyść zawartość home_frame
+        for widget in self.home_frame.winfo_children():
+            widget.destroy()
+
+        # Header
+        header = tk.Frame(self.home_frame, bg="#1e1e1e")
+        header.pack(fill="x")
+
+        # Załaduj awatar
+        avatar_path = self.user.get("avatar")
+        if avatar_path and os.path.exists(avatar_path):
+            avatar_image = Image.open(avatar_path)
+            avatar_image = avatar_image.resize((64, 64), resample=resampling)
+            avatar_photo = ImageTk.PhotoImage(avatar_image)
+            avatar_label = tk.Label(header, image=avatar_photo, bg="#1e1e1e")
+            avatar_label.image = avatar_photo
+            avatar_label.pack(side="left", padx=10, pady=10)
+
+        greetings = [
+            f"Witaj, {self.user['username']}!",
+            f"Co dzisiaj gramy, {self.user['username']}?",
+            f"Jak się masz, {self.user['username']}?",
+            f"Miło Cię widzieć, {self.user['username']}!",
+            f"Gotowy na nowe wyzwania, {self.user['username']}?"
+        ]
+        greeting = random.choice(greetings)
+        greeting_label = tk.Label(header, text=greeting, font=("Helvetica", 14), bg="#1e1e1e", fg="white")
+        greeting_label.pack(side="left", padx=10, pady=10)
+
+        # Zawartość
+        content = tk.Frame(self.home_frame, bg="#1e1e1e")
+        content.pack(fill="both", expand=True)
+        content.columnconfigure(0, weight=1)
+        content.rowconfigure(0, weight=1)
+
+        # Ostatnio Grane Gry
+        self.create_recently_played(content)
+
+        # Statystyki Czasu Spędzonego w Grach
+        self.create_time_stats(content)
+
+        # Losowe Gry
+        self.create_random_games(content)
+
+        # Statystyki Ogólne
+        self.create_statistics(content)
+
+    
+    def create_statistics(self, parent):
+        most_played_games = sorted(self.games.items(), key=lambda x: x[1].get('play_time', 0), reverse=True)
+        num_most_played = min(10, len(most_played_games))  # Możesz zmienić 10 na dowolną liczbę
+        frame = ttk.LabelFrame(parent, text="Statystyki Ogólne")
+        frame.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
+
+        # Najdłużej grane gry
+        ttk.Label(frame, text="Najdłużej Grane Gry:", font=("Helvetica", 12, "bold")).grid(row=0, column=0, sticky="w")
+        for idx, (game_name, game_data) in enumerate(most_played_games[:num_most_played]):
+            play_time = self.format_play_time(game_data.get('play_time', 0))
+            ttk.Label(frame, text=f"{idx + 1}. {game_name} - {play_time}").grid(row=idx + 1, column=0, sticky="w")
+        # Możesz dodać więcej statystyk według potrzeb
+
+
+
+
+    def create_recently_played(self, parent):
+        frame = ttk.LabelFrame(parent, text="Ostatnio Grane")
+        frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+
+        # Ostatnie 5 granych gier
+        recent_games = sorted(
+            [g for g in self.games.values() if g.get('last_played')],
+            key=lambda x: x['last_played'],
+            reverse=True
+        )[:5]
+
+        for idx, game in enumerate(recent_games):
+            game_name = [name for name, data in self.games.items() if data == game][0]
+            btn = ttk.Button(frame, text=game_name, command=lambda gn=game_name: self.launch_game(gn))
+            btn.grid(row=idx, column=0, padx=5, pady=5, sticky="w")
+
+
+    def create_time_stats(self, parent):
+        frame = ttk.LabelFrame(parent, text="Czas Spędzony w Grach")
+        frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+        # Wybór jednostki czasu
+        time_units = ['godziny', 'dni', 'miesiące', 'lata']
+        self.time_unit_var = tk.StringVar(value='godziny')
+
+        unit_menu = ttk.OptionMenu(frame, self.time_unit_var, self.time_unit_var.get(), *time_units, command=self.update_time_stats)
+        unit_menu.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+        # Etykiety do wyświetlania czasu
+        self.time_week_label = ttk.Label(frame, text="")
+        self.time_week_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+
+        self.time_month_label = ttk.Label(frame, text="")
+        self.time_month_label.grid(row=2, column=0, padx=5, pady=5, sticky="w")
+
+        self.time_year_label = ttk.Label(frame, text="")
+        self.time_year_label.grid(row=3, column=0, padx=5, pady=5, sticky="w")
+
+        self.update_time_stats()
+
+    def update_time_stats(self, *args):
+        total_week = self.get_total_play_time(period='week')
+        total_month = self.get_total_play_time(period='month')
+        total_year = self.get_total_play_time(period='year')
+
+        unit = self.time_unit_var.get()
+        factor = {'godziny': 3600, 'dni': 86400, 'miesiące': 2592000, 'lata': 31536000}[unit]
+
+        week_time = total_week / factor
+        month_time = total_month / factor
+        year_time = total_year / factor
+
+        self.time_week_label.config(text=f"W tym tygodniu: {week_time:.2f} {unit}")
+        self.time_month_label.config(text=f"W tym miesiącu: {month_time:.2f} {unit}")
+        self.time_year_label.config(text=f"W tym roku: {year_time:.2f} {unit}")
+
+    def get_total_play_time(self, period='week'):
+        total_time = 0
+        now = time.time()
+        period_seconds = {'week': 604800, 'month': 2592000, 'year': 31536000}[period]
+        for game in self.games.values():
+            sessions = game.get('play_sessions', [])
+            for session in sessions:
+                if now - session['end'] <= period_seconds:
+                    total_time += session['end'] - session['start']
+        return total_time
+
+    def create_random_games(self, parent):
+        frame = ttk.LabelFrame(parent, text="Losowe Gry")
+        frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+
+        # Wybierz do 10 losowych gier
+        if self.games:
+            num_random_games = min(10, len(self.games))  # Możesz zmienić 10 na dowolną liczbę
+            random_games = random.sample(list(self.games.keys()), num_random_games)
+            for idx, game_name in enumerate(random_games):
+                btn = ttk.Button(frame, text=game_name, command=lambda gn=game_name: self.launch_game(gn))
+                btn.grid(row=idx, column=0, padx=5, pady=5, sticky="w")
+        else:
+            ttk.Label(frame, text="Brak gier w bibliotece.").grid(row=0, column=0, padx=5, pady=5)
+
+
+    def create_game_grid(self):
+        # Canvas with vertical scrollbar
+        self.canvas = tk.Canvas(self.content, bg="#1e1e1e", highlightthickness=0)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+
+        self.scrollbar = ttk.Scrollbar(self.content, orient="vertical", command=self.canvas.yview)
+        self.scrollbar.grid(row=0, column=1, sticky="ns")
+
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.bind("<Configure>", self.on_canvas_configure)
+
+        self.games_frame = tk.Frame(self.canvas, bg="#1e1e1e")
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.games_frame, anchor="nw")
+
+        self.content.columnconfigure(0, weight=1)
+        self.content.rowconfigure(0, weight=1)
+
+        self.update_game_grid()
+
+
+
+    def on_canvas_configure(self, event):
+        self.canvas.itemconfig(self.canvas_window, width=event.width)
+
+
+
+
+    def update_game_grid(self, *args):
+        search_query = self.search_var.get().lower()
+        selected_group = self.group_var.get()
+
+        for widget in self.games_frame.winfo_children():
+            widget.destroy()
+
+        tile_width = 220  # Przybliżona szerokość pojedynczego kafelka
+        canvas_width = self.canvas.winfo_width()
+        if canvas_width <= 1:
+            # Canvas nie jest jeszcze zainicjowany, użyj szerokości zawartości
+            canvas_width = self.content.winfo_width()
+        num_columns = max(1, canvas_width // tile_width)
+
+        row = 0
+        col = 0
+
+        if selected_group != "Wszystkie Gry":
+            games_to_display = self.groups.get(selected_group, [])
+        else:
+            games_to_display = self.games.keys()
+
+        for game_name in sorted(games_to_display):
+            if search_query and search_query not in game_name.lower():
+                continue
+
+            game = self.games.get(game_name)
+            if not game:
+                continue  # Pomijamy, jeśli dane gry są niedostępne
+
+            game_frame = tk.Frame(self.games_frame, bg="#1e1e1e")
+            game_frame.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            self.create_game_tile(game_frame, game_name, game)
+
+            col += 1
+            if col >= num_columns:
+                col = 0
+                row += 1
+
+        self.games_frame.update_idletasks()
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+
+
+    def create_game_tile(self, parent, game_name, game_data):
+        image_path = game_data.get("cover_image")
+        if not image_path or not os.path.exists(image_path):
+            image_path = create_default_cover(game_name)
+            game_data["cover_image"] = image_path
+            save_config(self.config)
+
+        image = Image.open(image_path)
+        image = image.resize((200, 300), resample=resampling)
+        photo = ImageTk.PhotoImage(image)
+
+        frame = tk.Frame(parent, bg="#1e1e1e")
+        frame.pack(fill="both", expand=True)
+
+        cover_label = tk.Button(frame, image=photo, bg="#1e1e1e", activebackground="#1e1e1e", command=lambda: self.launch_game(game_name))
+        cover_label.image = photo
+        cover_label.grid(row=0, column=0, columnspan=2)
+
+        # Wyświetl nazwę gry, czas gry i procent ukończenia
+        completion = game_data.get('completion', 0)
+        name_label = tk.Label(frame, text=f"{game_name}\nCzas gry: {self.format_play_time(game_data.get('play_time', 0))}\nUkończenie: {completion}%", bg="#1e1e1e", fg="white")
+        name_label.grid(row=1, column=0, columnspan=2)
+
+        btn_frame = tk.Frame(frame, bg="#1e1e1e")
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=5)
+
+        # Przycisk Uruchom/Zamknij
+        if self.is_game_running(game_name):
+            launch_btn = tk.Button(btn_frame, text="Zamknij", bg="red", fg="white", command=lambda: self.close_game(game_name))
+        else:
+            launch_btn = tk.Button(btn_frame, text="Uruchom", bg="green", fg="white", command=lambda: self.launch_game(game_name))
+        launch_btn.pack(side="left", padx=5)
+
+        saves_btn = tk.Button(btn_frame, text="Zapis", bg="#2e2e2e", fg="white", command=lambda: self.manage_saves(game_name))
+        saves_btn.pack(side="left", padx=5)
+
+        edit_btn = tk.Button(btn_frame, text="Edytuj", bg="#2e2e2e", fg="white", command=lambda: self.edit_game(game_name))
+        edit_btn.pack(side="left", padx=5)
+
+        delete_btn = tk.Button(btn_frame, text="Usuń", bg="#2e2e2e", fg="white", command=lambda: self.delete_game(game_name))
+        delete_btn.pack(side="left", padx=5)
+
+        reset_stats_btn = tk.Button(btn_frame, text="Resetuj Statystyki", bg="#2e2e2e", fg="white", command=lambda: self.reset_stats(game_name))
+        reset_stats_btn.pack(side="left", padx=5)
+
+        add_to_group_btn = tk.Button(btn_frame, text="Dodaj do Grupy", bg="#2e2e2e", fg="white", command=lambda: self.add_to_group(game_name))
+        add_to_group_btn.pack(side="left", padx=5)
+
+        if self.group_var.get() != "Wszystkie Gry":
+            remove_from_group_btn = tk.Button(btn_frame, text="Usuń z Grupy", bg="#2e2e2e", fg="white", command=lambda: self.remove_from_group(game_name))
+            remove_from_group_btn.pack(side="left", padx=5)
+
+
+    def format_play_time(self, seconds):
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        return f"{hours}h {minutes}m"
+
+    def update_close_buttons(self):
+        for widget in self.games_frame.winfo_children():
+            for frame in widget.winfo_children():
+                if isinstance(frame, ttk.Frame):
+                    for btn_frame in frame.winfo_children():
+                        if isinstance(btn_frame, ttk.Frame):
+                            for btn in btn_frame.winfo_children():
+                                if isinstance(btn, ttk.Button):
+                                    if btn['text'] in ['Uruchom', 'Zamknij']:
+                                        name_label = frame.winfo_children()[1]
+                                        game_name = name_label.cget('text').split('\n')[0]
+                                        if self.is_game_running(game_name):
+                                            btn.config(text="Zamknij", style="Red.TButton", command=lambda gn=game_name: self.close_game(gn))
+                                        else:
+                                            btn.config(text="Uruchom", style="Green.TButton", command=lambda gn=game_name: self.launch_game(gn))
+        self.root.after(5000, self.update_close_buttons)  # Aktualizuj co 5 sekund
+
+    def launch_game(self, game_name):
+        game = self.games[game_name]
+        exe_path = game.get("exe_path")
+        if exe_path and os.path.exists(exe_path):
+            try:
+                os.startfile(exe_path)
+                # Rejestrowanie czasu uruchomienia
+                game["last_played"] = time.time()
+                game["play_time"] = game.get("play_time", 0)
+                save_config(self.config)  # Dodaj ten wiersz
+                threading.Thread(target=self.track_play_time, args=(game_name,), daemon=True).start()
+            except Exception as e:
+                messagebox.showerror("Błąd", f"Nie udało się uruchomić gry: {e}")
+        else:
+            messagebox.showwarning("Błąd", "Ścieżka do pliku wykonywalnego jest nieprawidłowa.")
+
+
+    def track_play_time(self, game_name):
+        start_time = time.time()
+        while self.is_game_running(game_name):
+            time.sleep(1)
+        end_time = time.time()
+        elapsed = end_time - start_time
+        self.games[game_name]["play_time"] += elapsed
+
+        # Loguj sesję
+        self.games[game_name].setdefault("play_sessions", []).append({'start': start_time, 'end': end_time})
+
+        save_config(self.config)
+        # Schedule GUI update in the main thread
+        self.root.after(0, self.update_after_game, game_name)
+
+    def update_after_game(self, game_name):
+        # Zapytaj o procent ukończenia gry
+        completion = simpledialog.askinteger("Procent ukończenia", f"Ile procent gry '{game_name}' ukończyłeś?")
+        if completion is not None:
+            self.games[game_name]["completion"] = completion
+        else:
+            self.games[game_name]["completion"] = self.games[game_name].get("completion", 0)
+        save_config(self.config)
+        self.update_game_grid()
+        self.update_time_stats()
+        self.create_home_page()  # Odświeżenie strony głównej
+
+    def is_game_running(self, game_name):
+        exe_path = self.games[game_name].get("exe_path")
+        if not exe_path:
+            return False
+
+        exe_name = os.path.basename(exe_path)
+        for proc in psutil.process_iter(['name', 'exe']):
+            try:
+                if proc.info['name'] == exe_name or proc.info['exe'] == exe_path:
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return False
+
+    def close_game(self, game_name):
+        exe_path = self.games[game_name].get("exe_path")
+        exe_name = os.path.basename(exe_path)
+        for proc in psutil.process_iter(['pid', 'name', 'exe']):
+            try:
+                if proc.info['name'] == exe_name or proc.info['exe'] == exe_path:
+                    parent = psutil.Process(proc.info['pid'])
+                    for child in parent.children(recursive=True):
+                        child.kill()
+                    parent.kill()
+                    messagebox.showinfo("Informacja", f"Gra '{game_name}' została zamknięta.")
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        else:
+            messagebox.showwarning("Błąd", f"Nie znaleziono procesu gry '{game_name}'.")
+        self.update_game_grid()
+
+    def reset_stats(self, game_name):
+        confirm = messagebox.askyesno("Resetuj Statystyki", f"Czy na pewno chcesz zresetować statystyki gry '{game_name}'?")
+        if confirm:
+            self.games[game_name]["play_time"] = 0
+            self.games[game_name]["completion"] = 0
+            self.games[game_name]["play_sessions"] = []
+            save_config(self.config)
+            self.update_game_grid()
+            self.update_time_stats()
+
+    def manage_saves(self, game_name):
+        save_manager = SaveManager(self.root, game_name, self.games[game_name])
+        self.root.wait_window(save_manager.top)
+
+    def add_game(self):
+        add_window = GameForm(self.root, "Dodaj Grę")
+        self.root.wait_window(add_window.top)
+        if add_window.result:
+            game_name, game_data = add_window.result
+            if game_name in self.games:
+                messagebox.showwarning("Błąd", "Gra o tej nazwie już istnieje.")
+                return
+            self.games[game_name] = game_data
+
+            # Zapytaj, czy zaimportować zapisy
+            import_saves = messagebox.askyesno("Importowanie zapisów", f"Czy chcesz zaimportować zapisy gry '{game_name}'?")
+            if import_saves:
+                source = filedialog.askdirectory(title="Wybierz folder z zapisami gry")
+                if source:
+                    destination = os.path.join(GAMES_FOLDER, game_name)
+                    os.makedirs(destination, exist_ok=True)
+                    try:
+                        shutil.copytree(source, destination, dirs_exist_ok=True)
+                        messagebox.showinfo("Sukces", "Zapisy zostały zaimportowane.")
+                    except Exception as e:
+                        messagebox.showerror("Błąd", f"Nie udało się zaimportować zapisów: {e}")
+
+            save_config(self.config)
+            self.update_game_grid()
+
+    def edit_game(self, game_name):
+        game_data = self.games[game_name]
+        edit_window = GameForm(self.root, "Edytuj Grę", game_name, game_data)
+        self.root.wait_window(edit_window.top)
+        if edit_window.result:
+            new_game_name, new_game_data = edit_window.result
+
+            # Zachowaj istniejące statystyki
+            new_game_data["play_time"] = game_data.get("play_time", 0)
+            new_game_data["completion"] = game_data.get("completion", 0)
+            new_game_data["last_played"] = game_data.get("last_played", None)
+            new_game_data["play_sessions"] = game_data.get("play_sessions", [])
+
+            if new_game_name != game_name:
+                del self.games[game_name]
+                # Zaktualizuj grupy
+                for group in self.groups.values():
+                    if game_name in group:
+                        group.remove(game_name)
+                        group.append(new_game_name)
+            self.games[new_game_name] = new_game_data
+            save_config(self.config)
+            self.update_game_grid()
+
+    def delete_game(self, game_name):
+        confirm = messagebox.askyesno("Usuń Grę", f"Czy na pewno chcesz usunąć grę '{game_name}'?")
+        if confirm:
+            # Usuń dane gry
+            if game_name in self.games:
+                # Usuń obraz okładki
+                cover_image = self.games[game_name].get("cover_image")
+                if cover_image and os.path.exists(cover_image):
+                    os.remove(cover_image)
+                # Usuń kopie zapisów
+                backup_path = os.path.join(GAMES_FOLDER, game_name)
+                if os.path.exists(backup_path):
+                    shutil.rmtree(backup_path)
+                # Usuń z grup
+                for group in self.groups.values():
+                    if game_name in group:
+                        group.remove(game_name)
+                # Usuń dane gry
+                del self.games[game_name]
+                save_config(self.config)
+                self.update_game_grid()
+            else:
+                messagebox.showwarning("Błąd", "Gra nie istnieje w bazie danych.")
+
+    def add_group(self):
+        group_name = simpledialog.askstring("Dodaj Grupę", "Podaj nazwę nowej grupy:")
+        if group_name:
+            if group_name in self.groups:
+                messagebox.showwarning("Błąd", "Grupa o tej nazwie już istnieje.")
+            else:
+                self.groups[group_name] = []
+                save_config(self.config)
+                self.update_group_menu()
+
+    def update_group_menu(self):
+        groups = ["Wszystkie Gry"] + list(self.groups.keys())
+        menu = self.group_menu['menu']
+        menu.delete(0, 'end')
+        for group in groups:
+            menu.add_command(label=group, command=lambda g=group: self.group_var.set(g))
+        self.group_var.set("Wszystkie Gry")
+        self.update_game_grid()
+
+    def add_to_group(self, game_name):
+        groups = list(self.groups.keys())
+        if not groups:
+            messagebox.showwarning("Błąd", "Nie utworzono żadnych grup. Najpierw dodaj grupę.")
+            return
+
+        selected_group = simpledialog.askstring("Dodaj do Grupy", f"Wybierz grupę dla gry '{game_name}':\n" + "\n".join(groups))
+        if selected_group in groups:
+            if game_name not in self.groups[selected_group]:
+                self.groups[selected_group].append(game_name)
+                save_config(self.config)
+                messagebox.showinfo("Sukces", f"Gra '{game_name}' została dodana do grupy '{selected_group}'.")
+            else:
+                messagebox.showwarning("Błąd", f"Gra '{game_name}' już znajduje się w grupie '{selected_group}'.")
+        else:
+            messagebox.showwarning("Błąd", "Wybrana grupa nie istnieje.")
+
+    def remove_from_group(self, game_name):
+        group = self.group_var.get()
+        if group != "Wszystkie Gry":
+            if game_name in self.groups.get(group, []):
+                self.groups[group].remove(game_name)
+                save_config(self.config)
+                messagebox.showinfo("Sukces", f"Gra '{game_name}' została usunięta z grupy '{group}'.")
+                self.update_game_grid()
+            else:
+                messagebox.showwarning("Błąd", f"Gra '{game_name}' nie znajduje się w grupie '{group}'.")
+
+    def show_home(self):
+        self.home_frame.tkraise()
+
+    def show_library(self):
+        self.main_frame.tkraise()
+
+    def change_theme(self, selected_theme):
+        self.settings["theme"] = selected_theme
+        save_config(self.config)
+        self.apply_theme(THEMES[selected_theme])
+
+    def apply_theme(self, theme):
+        style = ttk.Style(self.root)
+        style.configure("TFrame", background=theme['background'])
+        style.configure("TLabel", background=theme['background'], foreground=theme['foreground'])
+        style.configure("TButton", background=theme['button_background'], foreground=theme['button_foreground'])
+        style.configure("Game.TButton", background=theme['background'], foreground=theme['foreground'])
+        # Aktualizuj inne elementy interfejsu według potrzeb
+
+    def select_background_image(self):
+        path = filedialog.askopenfilename(filetypes=[("Obrazy", "*.png;*.jpg;*.jpeg")])
+        if path:
+            self.background_image_var.set(path)
+            self.settings["background_image"] = path
+            save_config(self.config)
+            self.apply_background_image(path)
+
+    def apply_background_image(self, image_path):
+        if os.path.exists(image_path):
+            bg_image = Image.open(image_path)
+            # Uzyskaj rozmiar okna głównego
+            window_width = self.root.winfo_width()
+            window_height = self.root.winfo_height()
+            if window_width <= 1 or window_height <= 1:
+                # Jeśli okno nie jest jeszcze zainicjowane, ustaw domyślny rozmiar
+                window_width = 1024
+                window_height = 768
+            # Dopasuj obraz do rozmiaru okna
+            bg_image = bg_image.resize((window_width, window_height), resample=resampling)
+            bg_photo = ImageTk.PhotoImage(bg_image)
+            self.bg_canvas.create_image(0, 0, image=bg_photo, anchor='nw')
+            self.bg_canvas.image = bg_photo  # Zachowaj referencję
+        else:
+            self.bg_canvas.delete("all")
+
+
+    def show_settings(self):
+        settings_window = tk.Toplevel(self.root)
+        settings_window.title("Ustawienia")
+        settings_window.configure(bg="#1e1e1e")
+        settings_window.grab_set()
+
+        ttk.Label(settings_window, text="Ustawienia", font=("Helvetica", 14)).pack(pady=10)
+        # Tutaj dodaj resztę opcji ustawień zgodnie z potrzebami
+        # motywy
+        ttk.Label(settings_window, text="Motyw kolorystyczny:").pack(pady=5)
+        self.theme_var = tk.StringVar(value=self.settings.get("theme", "Dark"))
+        theme_menu = ttk.OptionMenu(settings_window, self.theme_var, self.theme_var.get(), *THEMES.keys(), command=self.change_theme)
+        theme_menu.pack(pady=5)
+
+        # Opcja autostartu
+        self.autostart_var = tk.BooleanVar()
+        self.autostart_var.set(self.settings.get("autostart", False))
+        autostart_check = ttk.Checkbutton(settings_window, text="Uruchamiaj z systemem Windows", variable=self.autostart_var, command=self.toggle_autostart)
+        autostart_check.pack(pady=5)
+
+        # Zmiana nazwy użytkownika
+        ttk.Button(settings_window, text="Zmień Nazwę Użytkownika", command=self.change_username).pack(pady=5)
+        
+        #opcja ustawienia awatara w ustawieniach
+        ttk.Label(settings_window, text="Awatar Użytkownika:").pack(pady=5)
+        self.avatar_var = tk.StringVar(value=self.user.get("avatar", ""))
+        avatar_entry = ttk.Entry(settings_window, textvariable=self.avatar_var)
+        avatar_entry.pack(pady=5)
+        avatar_button = ttk.Button(settings_window, text="Wybierz...", command=self.select_avatar)
+        avatar_button.pack(pady=5)
+        
+       
+        #opcja wyboru obrazu tła w ustawieniach
+        ttk.Label(settings_window, text="Obraz tła:").pack(pady=5)
+        self.background_image_var = tk.StringVar(value=self.settings.get("background_image", ""))
+        bg_entry = ttk.Entry(settings_window, textvariable=self.background_image_var)
+        bg_entry.pack(pady=5)
+        bg_button = ttk.Button(settings_window, text="Wybierz...", command=self.select_background_image)
+        bg_button.pack(pady=5)
+
+
+        # Pole do edycji GitHub Token
+        token_frame = ttk.Frame(settings_window)
+        token_frame.pack(pady=5)
+
+        ttk.Label(token_frame, text="GitHub Personal Access Token:").grid(row=0, column=0, sticky='w')
+        self.github_token_entry = ttk.Entry(token_frame, show='*')
+        self.github_token_entry.grid(row=0, column=1, padx=5)
+        self.github_token_entry.insert(0, self.local_settings.get("github_token", ""))
+
+        help_button = ttk.Button(token_frame, text="?", width=2, command=self.show_github_token_help)
+        help_button.grid(row=0, column=2, padx=5)
+
+        show_token_var = tk.BooleanVar()
+        show_token_check = ttk.Checkbutton(settings_window, text="Pokaż Token", variable=show_token_var, command=self.toggle_show_token)
+        show_token_check.pack(pady=5)
+
+        ttk.Button(settings_window, text="Zapisz Token", command=self.save_github_token).pack(pady=5)
+
+
+        # Synchronizacja z chmurą
+        ttk.Label(settings_window, text="Synchronizacja z Chmurą").pack(pady=5)
+
+        self.cloud_services = {
+            "Google Drive": tk.BooleanVar(value=self.settings.get("cloud_service_google_drive", False)),
+            "GitHub": tk.BooleanVar(value=self.settings.get("cloud_service_github", False))
+        }
+
+        for service, var in self.cloud_services.items():
+            cb = ttk.Checkbutton(settings_window, text=service, variable=var, command=self.update_cloud_services)
+            cb.pack(pady=2, anchor='w')
+
+        ttk.Button(settings_window, text="Prześlij do Chmury", command=self.upload_to_cloud).pack(pady=5)
+        ttk.Button(settings_window, text="Pobierz z Chmury", command=self.download_from_cloud).pack(pady=5)
+
+        ttk.Button(settings_window, text="Zamknij", command=settings_window.destroy).pack(pady=20)
+
+    def toggle_show_token(self):
+        if self.github_token_entry['show'] == '*':
+            self.github_token_entry['show'] = ''
+        else:
+            self.github_token_entry['show'] = '*'
+
+    def save_github_token(self):
+        token = self.github_token_entry.get().strip()
+        if token:
+            self.local_settings["github_token"] = token
+            save_local_settings(self.local_settings)
+            messagebox.showinfo("Sukces", "Token GitHub został zapisany.")
+        else:
+            messagebox.showwarning("Błąd", "Token GitHub nie może być pusty.")
+
+    def show_github_token_help(self):
+        message = (
+            "Jak uzyskać GitHub Personal Access Token:\n\n"
+            "1. Przejdź na stronę GitHub: https://github.com/settings/tokens\n"
+            "2. Kliknij 'Generate new token' lub 'Fine-grained tokens' (w zależności od wersji GitHub).\n"
+            "3. Nadaj tokenowi nazwę i ustaw odpowiednie uprawnienia:\n"
+            "   - Dla tego programu potrzebujesz uprawnień 'repo'.\n"
+            "4. Skopiuj wygenerowany token i wprowadź go w polu tokena w ustawieniach programu.\n\n"
+            "**Pamiętaj, aby nie udostępniać swojego tokena publicznie!**"
+        )
+        messagebox.showinfo("Pomoc - GitHub Token", message)
+
+    def show_progress_window(self, title):
+        self.progress_window = tk.Toplevel(self.root)
+        self.progress_window.title(title)
+        self.progress_window.geometry("300x100")
+        self.progress_window.resizable(False, False)
+        ttk.Label(self.progress_window, text=title).pack(pady=10)
+        self.progress_bar = ttk.Progressbar(self.progress_window, orient='horizontal', mode='determinate', maximum=100)
+        self.progress_bar.pack(pady=10, fill='x', padx=20)
+        self.progress_label = ttk.Label(self.progress_window, text="0%")
+        self.progress_label.pack()
+        self.progress_window.protocol("WM_DELETE_WINDOW", self.disable_event)  # Blokujemy zamknięcie okna
+
+
+    def update_cloud_services(self):
+        self.settings["cloud_service_google_drive"] = self.cloud_services["Google Drive"].get()
+        self.settings["cloud_service_github"] = self.cloud_services["GitHub"].get()
+        save_config(self.config)
+
+    def toggle_autostart(self):
+        if self.autostart_var.get():
+            # Dodaj do rejestru
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "GameLauncher", 0, winreg.REG_SZ, sys.executable + " " + os.path.abspath(__file__))
+            winreg.CloseKey(key)
+        else:
+            # Usuń z rejestru
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+                winreg.DeleteValue(key, "GameLauncher")
+                winreg.CloseKey(key)
+            except FileNotFoundError:
+                pass
+
+        self.settings["autostart"] = self.autostart_var.get()
+        save_config(self.config)
+
+    def change_username(self):
+        username = simpledialog.askstring("Zmień Nazwę Użytkownika", "Podaj nową nazwę użytkownika:")
+        if username:
+            self.user["username"] = username
+            save_config(self.config)
+            messagebox.showinfo("Sukces", "Nazwa użytkownika została zmieniona.")
+            self.create_home_page()  # Odświeżenie strony głównej
+        else:
+            messagebox.showwarning("Błąd", "Nazwa użytkownika nie może być pusta.")
+
+    def setup_google_drive(self):
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from google.auth.transport.requests import Request
+        import pickle
+
+        SCOPES = ['https://www.googleapis.com/auth/drive.file']
+        creds = None
+        if os.path.exists('token_google_drive.pickle'):
+            with open('token_google_drive.pickle', 'rb') as token:
+                creds = pickle.load(token)
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                if not os.path.exists('credentials.json'):
+                    messagebox.showerror("Błąd", "Brak pliku credentials.json dla Google Drive.")
+                    return
+                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+                creds = flow.run_local_server(port=0)
+            with open('token_google_drive.pickle', 'wb') as token:
+                pickle.dump(creds, token)
+        self.google_drive_creds = creds
+        messagebox.showinfo("Sukces", "Google Drive zostało skonfigurowane.")
+
+    def setup_github(self):
+        token = self.local_settings.get("github_token")
+        if not token:
+            token = simpledialog.askstring("GitHub Token", "Podaj swój GitHub Personal Access Token:", show='*')
+            if token:
+                self.local_settings["github_token"] = token
+                save_local_settings(self.local_settings)
+                messagebox.showinfo("Sukces", "GitHub został skonfigurowany.")
+            else:
+                messagebox.showwarning("Błąd", "Token GitHub jest wymagany.")
+        else:
+            messagebox.showinfo("Informacja", "GitHub jest już skonfigurowany.")
+
+
+    def upload_to_cloud(self):
+        services = []
+        if self.settings.get("cloud_service_google_drive"):
+            services.append("Google Drive")
+        if self.settings.get("cloud_service_github"):
+            services.append("GitHub")
+        if not services:
+            messagebox.showwarning("Błąd", "Nie wybrano żadnej usługi chmurowej.")
+            return
+
+        # Sprawdź, czy token GitHub jest dostępny przed rozpoczęciem wątku
+        if "GitHub" in services:
+            token = self.local_settings.get("github_token")
+            if not token:
+                self.setup_github()
+                token = self.local_settings.get("github_token")
+                if not token:
+                    messagebox.showwarning("Błąd", "Brak tokenu GitHub.")
+                    return
+
+        # Tworzenie okna paska postępu
+        self.show_progress_window("Przesyłanie do chmury")
+
+        # Rozpocznij wątek roboczy
+        threading.Thread(target=self.upload_to_cloud_thread, args=(services,), daemon=True).start()
+
+        # Rozpocznij sprawdzanie kolejki z postępem
+        self.check_progress_queue()
+
+    def check_progress_queue(self):
+        try:
+            while True:
+                item = self.progress_queue.get_nowait()
+                if item == "DONE":
+                    self.progress_window.destroy()
+                    messagebox.showinfo("Sukces", "Pliki zostały przesłane do chmury.")
+                    return
+                elif str(item).startswith("ERROR:"):
+                    self.progress_window.destroy()
+                    messagebox.showerror("Błąd", item[6:])
+                    return
+                else:
+                    percent = item
+                    self.update_progress(percent)
+        except queue.Empty:
+            pass
+        # Harmonogram następnego sprawdzenia
+        self.root.after(100, self.check_progress_queue)
+
+
+    def download_from_cloud(self):
+        services = []
+        if self.settings.get("cloud_service_google_drive"):
+            services.append("Google Drive")
+        if self.settings.get("cloud_service_github"):
+            services.append("GitHub")
+        if not services:
+            messagebox.showwarning("Błąd", "Nie wybrano żadnej usługi chmurowej.")
+            return
+        for service in services:
+            if service == "Google Drive":
+                self.download_from_google_drive()
+            elif service == "GitHub":
+                self.download_from_github()
+
+    def upload_to_google_drive(self):
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaFileUpload
+
+        if not hasattr(self, 'google_drive_creds'):
+            self.setup_google_drive()
+        service = build('drive', 'v3', credentials=self.google_drive_creds)
+        file_metadata = {'name': CONFIG_FILE}
+        media = MediaFileUpload(CONFIG_FILE, mimetype='application/json')
+        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        messagebox.showinfo("Sukces", "Plik został przesłany do Google Drive.")
+
+    def download_from_google_drive(self):
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseDownload
+        import io
+
+        if not hasattr(self, 'google_drive_creds'):
+            self.setup_google_drive()
+        service = build('drive', 'v3', credentials=self.google_drive_creds)
+        # Wyszukaj plik
+        results = service.files().list(q=f"name='{CONFIG_FILE}'", spaces='drive', fields='files(id, name)').execute()
+        items = results.get('files', [])
+        if not items:
+            messagebox.showwarning("Błąd", "Nie znaleziono pliku w Google Drive.")
+            return
+        file_id = items[0]['id']
+        request = service.files().get_media(fileId=file_id)
+        fh = io.FileIO(CONFIG_FILE, 'wb')
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+        fh.close()
+        self.config = load_config()
+        self.games = self.config.setdefault("games", {})
+        self.settings = self.config.setdefault("settings", {})
+        self.groups = self.config.setdefault("groups", {})
+        self.user = self.config.setdefault("user", {})
+        self.update_game_grid()
+        self.create_home_page()
+        messagebox.showinfo("Sukces", "Plik został pobrany z Google Drive.")
+
+    def do_upload_to_github(self):
+        from github import Github, GithubException
+
+        token = self.local_settings.get("github_token")
+        if not token:
+            self.progress_queue.put("ERROR: Brak tokenu GitHub")
+            return
+        g = Github(token)
+        user = g.get_user()
+        repo_name = "game_launcher_saves"
+        try:
+            repo = user.get_repo(repo_name)
+        except GithubException:
+            repo = user.create_repo(repo_name)
+        # Przesłanie pliku config.json
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as file:
+            content = file.read()
+        try:
+            contents = repo.get_contents(CONFIG_FILE)
+            repo.update_file(contents.path, "Update config", content, contents.sha)
+        except GithubException as e:
+            if e.status == 404:
+                repo.create_file(CONFIG_FILE, "Create config", content)
+            else:
+                self.progress_queue.put(f"ERROR: Nie udało się przesłać pliku config.json: {e}")
+                return
+        # Przesłanie folderu games_saves
+        self.upload_folder_to_github(repo, GAMES_FOLDER, GAMES_FOLDER)
+
+
+    def upload_folder_to_github(self, repo, local_folder, repo_folder):
+        files = []
+        for root, dirs, filenames in os.walk(local_folder):
+            for filename in filenames:
+                files.append(os.path.join(root, filename))
+        total_files = len(files)
+        for idx, local_file_path in enumerate(files):
+            with open(local_file_path, 'rb') as file:
+                content = file.read()
+            repo_file_path = os.path.join(repo_folder, os.path.relpath(local_file_path, local_folder)).replace("\\", "/")
+            try:
+                contents = repo.get_contents(repo_file_path)
+                repo.update_file(contents.path, f"Update {repo_file_path}", content, contents.sha)
+            except GithubException as e:
+                if e.status == 404:
+                    repo.create_file(repo_file_path, f"Create {repo_file_path}", content)
+                else:
+                    self.progress_queue.put(f"ERROR: Nie udało się przesłać pliku {repo_file_path}: {e}")
+                    return
+            # Aktualizacja postępu
+            percent = int(((idx + 1) / total_files) * 100)
+            self.progress_queue.put(percent)
+
+
+
+    def download_from_github(self):
+        from github import Github, GithubException
+
+        self.show_progress_window("Pobieranie z GitHub")
+        self.progress_bar['value'] = 0
+        self.progress_label.config(text="0%")
+
+        token = self.local_settings.get("github_token")
+        if not token:
+            self.setup_github()
+            token = self.local_settings.get("github_token")
+        g = Github(token)
+        user = g.get_user()
+        repo_name = "game_launcher_saves"  # Upewnij się, że nazwa jest poprawna
+        try:
+            repo = user.get_repo(repo_name)
+        except GithubException:
+            messagebox.showwarning("Błąd", f"Repozytorium '{repo_name}' nie istnieje.")
+            self.progress_window.destroy()
+            return
+        # Pobranie pliku config.json
+        try:
+            contents = repo.get_contents(CONFIG_FILE)
+            content = contents.decoded_content.decode('utf-8')
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
+                file.write(content)
+        except GithubException:
+            messagebox.showwarning("Błąd", "Nie znaleziono pliku config.json w repozytorium GitHub.")
+            self.progress_window.destroy()
+            return
+        # Pobranie folderu games_saves
+        self.download_folder_from_github(repo, GAMES_FOLDER, GAMES_FOLDER, progress_callback=self.update_progress)
+        # Ponowne wczytanie konfiguracji
+        self.config = load_config()
+        self.games = self.config.setdefault("games", {})
+        self.settings = self.config.setdefault("settings", {})
+        self.groups = self.config.setdefault("groups", {})
+        self.user = self.config.setdefault("user", {})
+        self.update_game_grid()
+        self.create_home_page()
+        self.progress_window.destroy()
+        messagebox.showinfo("Sukces", "Pliki zostały pobrane z GitHub.")
+
+
+    def download_folder_from_github(self, repo, repo_folder, local_folder, progress_callback=None):
+        contents = repo.get_contents(repo_folder)
+        files = []
+        while contents:
+            file_content = contents.pop(0)
+            if file_content.type == 'dir':
+                contents.extend(repo.get_contents(file_content.path))
+            else:
+                files.append(file_content)
+        total_files = len(files)
+        for idx, file_content in enumerate(files):
+            file_path = os.path.join(local_folder, os.path.relpath(file_content.path, repo_folder))
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, 'wb') as file:
+                file.write(file_content.decoded_content)
+            # Aktualizacja postępu
+            if progress_callback:
+                percent = int(((idx + 1) / total_files) * 100)
+                self.root.after(0, progress_callback, percent)
+
+    def disable_event(self):
+        pass
+
+    def update_progress(self, percent):
+        if hasattr(self, 'progress_bar') and self.progress_bar.winfo_exists():
+            self.progress_bar['value'] = percent
+            self.progress_label.config(text=f"{percent}%")
+            self.progress_window.update_idletasks()
+
+    def upload_to_cloud_thread(self, services):
+        for service in services:
+            if service == "Google Drive":
+                self.do_upload_to_google_drive()
+            elif service == "GitHub":
+                self.do_upload_to_github()
+        # Wskaźnik zakończenia
+        self.progress_queue.put("DONE")
+
+    def check_progress_queue(self):
+        try:
+            while True:
+                item = self.progress_queue.get_nowait()
+                if item == "DONE":
+                    self.progress_window.destroy()
+                    messagebox.showinfo("Sukces", "Pliki zostały przesłane do chmury.")
+                    return
+                elif str(item).startswith("ERROR:"):
+                    self.progress_window.destroy()
+                    messagebox.showerror("Błąd", item[6:])
+                    return
+                else:
+                    percent = item
+                    self.update_progress(percent)
+        except queue.Empty:
+            pass
+        # Harmonogram następnego sprawdzenia
+        self.root.after(100, self.check_progress_queue)
+
+    def select_avatar(self):
+        path = filedialog.askopenfilename(filetypes=[("Obrazy", "*.png;*.jpg;*.jpeg")])
+        if path:
+            self.avatar_var.set(path)
+            self.user["avatar"] = path
+            save_config(self.config)
+            self.create_home_page()  # Odśwież stronę główną, aby wyświetlić nowy awatar
+
+
+class GameForm:
+    def __init__(self, parent, title="Dodaj Grę", game_name=None, game_data=None):
+        self.top = tk.Toplevel(parent)
+        self.top.title(title)
+        self.top.configure(bg="#1e1e1e")
+        self.top.grab_set()
+        self.result = None
+        self.create_widgets(game_name, game_data)
+
+        # Konfiguracja siatki w self.root
+        self.root.rowconfigure(0, weight=1)
+        self.root.columnconfigure(0, weight=0)  # Sidebar
+        self.root.columnconfigure(1, weight=1)  # Główna zawartość
+
+        # Background Canvas
+        self.bg_canvas = tk.Canvas(self.root, bg="#1e1e1e", highlightthickness=0)
+        self.bg_canvas.grid(row=0, column=0, columnspan=2, sticky="nsew")
+
+        # Sidebar
+        self.sidebar = ttk.Frame(self.root, width=200)
+        self.sidebar.grid(row=0, column=0, sticky="ns")
+        self.sidebar.grid_propagate(False)
+        self.create_sidebar()
+
+        # Home Frame (podłączony do self.root)
+        self.home_frame = tk.Frame(self.root, bg="#1e1e1e")
+        self.home_frame.grid(row=0, column=1, sticky="nsew")
+        self.home_frame.columnconfigure(0, weight=1)
+        self.home_frame.rowconfigure(1, weight=1)
+
+        # Main Frame (podłączony do self.root)
+        self.main_frame = tk.Frame(self.root, bg="#1e1e1e")
+        self.main_frame.grid(row=0, column=1, sticky="nsew")
+        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.rowconfigure(1, weight=1)
+
+        # Obniżenie canvas za innymi widgetami (po stworzeniu ramek)
+        self.root.tk.call('lower', self.bg_canvas._w)
+        
+        # Stylizacja
+        style = ttk.Style(self.root)
+        style.theme_use('clam')
+        style.configure("TFrame", background="#1e1e1e")
+        style.configure("TLabel", background="#1e1e1e", foreground="white")
+        style.configure("TButton", background="#2e2e2e", foreground="white", padding=6)
+        style.configure("Game.TButton", background="#1e1e1e", foreground="white", padding=0, borderwidth=0)
+        style.map("Game.TButton",
+                  background=[('active', '#1e1e1e')],
+                  borderwidth=[('active', 0)])
+        style.configure("TEntry", fieldbackground="#2e2e2e", background="#2e2e2e", foreground="white")
+        style.configure("TScrollbar", background="#2e2e2e", troughcolor="#1e1e1e", arrowcolor="white")
+
+        style.configure("Green.TButton", background="green", foreground="white")
+        style.configure("Red.TButton", background="red", foreground="white")
+
+        # Załadowanie konfiguracji
+        self.config = load_config()
+        self.settings = self.config.setdefault("settings", {})
+        self.games = self.config.setdefault("games", {})
+        self.groups = self.config.setdefault("groups", {})
+        self.user = self.config.setdefault("user", {})
+        self.local_settings = load_local_settings()
+        self.progress_queue = queue.Queue()
+
+        # Teraz możesz użyć self.settings
+        self.apply_theme(THEMES.get(self.settings.get("theme", "Dark")))
+        bg_image_path = self.settings.get("background_image", "")
+        if bg_image_path:
+            self.apply_background_image(bg_image_path)
+
+        # Zapytaj o nazwę użytkownika, jeśli nie jest ustawiona
+        if not self.user.get("username"):
+            self.ask_for_username()
+
+        # Tworzenie strony głównej i innych elementów
+        self.create_home_page()  # Wywołanie po zdefiniowaniu self.user
+        self.create_header()
+        self.create_game_grid()
+        self.update_close_buttons()
+        self.show_home()
+
+        # Opcja przełączania trybu pełnoekranowego
+        self.fullscreen_var = tk.BooleanVar(value=False)
+        fullscreen_btn = ttk.Checkbutton(self.sidebar, text="Tryb Pełnoekranowy", variable=self.fullscreen_var, command=self.toggle_fullscreen)
+        fullscreen_btn.pack(pady=5)
+        style.configure('TLabel', font=('Helvetica', 18))
+        style.configure('TButton', font=('Helvetica', 18))
+
+
+    def select_exe(self):
+        path = filedialog.askopenfilename(filetypes=[("Pliki wykonywalne", "*.exe")])
+        if path:
+            self.exe_entry.delete(0, tk.END)
+            self.exe_entry.insert(0, path)
+
+    def select_save(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.save_entry.delete(0, tk.END)
+            self.save_entry.insert(0, path)
+
+    def select_cover(self):
+        path = filedialog.askopenfilename(filetypes=[("Obrazy", "*.png;*.jpg;*.jpeg")])
+        if path:
+            self.cover_entry.delete(0, tk.END)
+            self.cover_entry.insert(0, path)
+
+    def save(self):
+        name = self.name_entry.get().strip()
+        exe_path = self.exe_entry.get().strip()
+        save_path = self.save_entry.get().strip()
+        cover_image = self.cover_entry.get().strip()
+
+        if not name or not exe_path:
+            messagebox.showwarning("Błąd", "Nazwa gry i ścieżka do pliku wykonywalnego są wymagane.")
+            return
+
+        # Jeśli użytkownik podał własny obraz okładki, kopiujemy go do folderu images
+        if cover_image and os.path.exists(cover_image):
+            dest_path = os.path.join(IMAGES_FOLDER, f"{name}_cover{os.path.splitext(cover_image)[1]}")
+            shutil.copy(cover_image, dest_path)
+            cover_image = dest_path
+        else:
+            # Jeśli nie, zostawiamy poprzedni obraz lub wygenerujemy domyślny
+            cover_image = cover_image or None
+
+        game_data = {
+            "exe_path": exe_path,
+            "save_path": save_path,
+            "cover_image": cover_image,
+            # Statystyki zostaną zachowane podczas edycji w metodzie edit_game
+        }
+
+        self.result = (name, game_data)
+        self.top.destroy()
+
+class SaveManager:
+    def __init__(self, parent, game_name, game_data):
+        self.top = tk.Toplevel(parent)
+        self.top.title(f"Zarządzanie zapisami - {game_name}")
+        self.top.configure(bg="#1e1e1e")
+        self.top.grab_set()
+
+        ttk.Label(self.top, text=f"Zarządzanie zapisami - {game_name}", font=("Helvetica", 14)).pack(pady=10)
+
+        self.game_name = game_name
+        self.save_path = game_data.get("save_path")
+        self.backup_path = os.path.join(GAMES_FOLDER, game_name)
+
+        # Lista zapisów
+        self.saves_listbox = tk.Listbox(self.top)
+        self.saves_listbox.pack(pady=5)
+
+        self.update_saves_list()
+
+        ttk.Button(self.top, text="Utwórz Zapis", command=self.create_save).pack(pady=5)
+        ttk.Button(self.top, text="Wczytaj Zapis", command=self.load_save).pack(pady=5)
+        ttk.Button(self.top, text="Edytuj Zapis", command=self.edit_save).pack(pady=5)
+        ttk.Button(self.top, text="Usuń Zapis", command=self.delete_save).pack(pady=5)
+        ttk.Button(self.top, text="Zamknij", command=self.top.destroy).pack(pady=20)
+
+    def update_saves_list(self):
+        self.saves_listbox.delete(0, tk.END)
+        saves_folder = os.path.join(self.backup_path, 'saves')
+        if os.path.exists(saves_folder):
+            saves = os.listdir(saves_folder)
+            for save in saves:
+                self.saves_listbox.insert(tk.END, save)
+
+    def create_save(self):
+        if self.save_path and os.path.exists(self.save_path):
+            percent = simpledialog.askinteger("Procent ukończenia", "Podaj procent ukończenia gry dla tego zapisu:")
+            if percent is not None:
+                save_name = f"Save_{percent}%_{time.strftime('%Y%m%d_%H%M%S')}"
+                destination = os.path.join(self.backup_path, 'saves', save_name)
+                os.makedirs(destination, exist_ok=True)
+                try:
+                    shutil.copytree(self.save_path, destination, dirs_exist_ok=True)
+                    messagebox.showinfo("Sukces", "Zapis został utworzony.")
+                    self.update_saves_list()
+                except Exception as e:
+                    messagebox.showerror("Błąd", f"Nie udało się utworzyć zapisu: {e}")
+        else:
+            messagebox.showwarning("Błąd", "Ścieżka do zapisów jest nieprawidłowa.")
+
+    def load_save(self):
+        selected = self.saves_listbox.curselection()
+        if selected:
+            save_name = self.saves_listbox.get(selected)
+            source = os.path.join(self.backup_path, 'saves', save_name)
+            if os.path.exists(source):
+                try:
+                    shutil.copytree(source, self.save_path, dirs_exist_ok=True)
+                    messagebox.showinfo("Sukces", "Zapis został wczytany.")
+                except Exception as e:
+                    messagebox.showerror("Błąd", f"Nie udało się wczytać zapisu: {e}")
+            else:
+                messagebox.showwarning("Błąd", "Wybrany zapis nie istnieje.")
+        else:
+            messagebox.showwarning("Błąd", "Nie wybrano żadnego zapisu.")
+
+    def edit_save(self):
+        selected = self.saves_listbox.curselection()
+        if selected:
+            old_save_name = self.saves_listbox.get(selected)
+            percent = simpledialog.askinteger("Edytuj Procent Ukończenia", "Podaj nowy procent ukończenia dla tego zapisu:")
+            if percent is not None:
+                # Nowa nazwa zapisu z zachowaniem daty
+                timestamp = '_'.join(old_save_name.split('_')[-2:])
+                new_save_name = f"Save_{percent}%_{timestamp}"
+                old_save_path = os.path.join(self.backup_path, 'saves', old_save_name)
+                new_save_path = os.path.join(self.backup_path, 'saves', new_save_name)
+                try:
+                    os.rename(old_save_path, new_save_path)
+                    messagebox.showinfo("Sukces", "Zapis został zaktualizowany.")
+                    self.update_saves_list()
+                except Exception as e:
+                    messagebox.showerror("Błąd", f"Nie udało się zaktualizować zapisu: {e}")
+        else:
+            messagebox.showwarning("Błąd", "Nie wybrano żadnego zapisu.")
+
+    def delete_save(self):
+        selected = self.saves_listbox.curselection()
+        if selected:
+            save_name = self.saves_listbox.get(selected)
+            save_path = os.path.join(self.backup_path, 'saves', save_name)
+            confirm = messagebox.askyesno("Usuń Zapis", f"Czy na pewno chcesz usunąć zapis '{save_name}'?")
+            if confirm:
+                try:
+                    shutil.rmtree(save_path)
+                    messagebox.showinfo("Sukces", "Zapis został usunięty.")
+                    self.update_saves_list()
+                except Exception as e:
+                    messagebox.showerror("Błąd", f"Nie udało się usunąć zapisu: {e}")
+        else:
+            messagebox.showwarning("Błąd", "Nie wybrano żadnego zapisu.")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = GameLauncher(root)
+    root.mainloop()
