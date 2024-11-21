@@ -1,12 +1,13 @@
 {
+    "version": "1.3.0",
     "games": {
         "High on Life": {
             "exe_path": "E:/2022/High on Life/Oregon.exe",
             "save_path": "C:/Users/ASRock/AppData/Local/Oregon",
             "cover_image": "images\\High on Life_cover.jpg",
-            "play_time": 176.70103883743286,
-            "completion": 2,
-            "last_played": 1730050390.134902,
+            "play_time": 6144.477545499802,
+            "completion": 100,
+            "last_played": 1731704420.4917638,
             "play_sessions": [
                 {
                     "start": 1729981397.2003136,
@@ -27,15 +28,76 @@
                 {
                     "start": 1730043387.6477325,
                     "end": 1730043412.7799265
+                },
+                {
+                    "start": 1730498226.9141397,
+                    "end": 1730498236.984773
+                },
+                {
+                    "start": 1730638081.1023684,
+                    "end": 1730638196.6982603
+                },
+                {
+                    "start": 1730638767.5383294,
+                    "end": 1730638938.406411
+                },
+                {
+                    "start": 1730666918.6785846,
+                    "end": 1730666943.8499475
+                },
+                {
+                    "start": 1730667033.193201,
+                    "end": 1730667078.4641008
+                },
+                {
+                    "start": 1730667385.520296,
+                    "end": 1730667395.584922
+                },
+                {
+                    "start": 1730667657.1666386,
+                    "end": 1730667662.1902537
+                },
+                {
+                    "start": 1730667721.5640612,
+                    "end": 1730667766.7989905
+                },
+                {
+                    "start": 1730668197.2700539,
+                    "end": 1730668352.9930606
+                },
+                {
+                    "start": 1730674552.222471,
+                    "end": 1730674682.88554
+                },
+                {
+                    "start": 1730674778.3493006,
+                    "end": 1730674793.439114
+                },
+                {
+                    "start": 1730675000.1812544,
+                    "end": 1730675010.227676
+                },
+                {
+                    "start": 1730712806.4463398,
+                    "end": 1730712831.5569801
+                },
+                {
+                    "start": 1730713774.117291,
+                    "end": 1730713789.200756
+                },
+                {
+                    "start": 1731704420.4917638,
+                    "end": 1731709598.5624797
                 }
-            ]
+            ],
+            "play_count": 8
         },
         "Mafia Definitive Edition": {
             "exe_path": "E:/2020/Mafia - Definitive Edition/mafiadefinitiveedition.exe",
             "save_path": "C:/Users/ASRock/Documents/My Games/Mafia Definitive Edition",
             "cover_image": "images\\Mafia Definitive Edition_cover.jpg",
-            "last_played": 1730033090.213938,
-            "play_time": 393.4245059490204,
+            "last_played": 1730638958.4951653,
+            "play_time": 589.2818439006805,
             "play_sessions": [
                 {
                     "start": 1729985572.3282468,
@@ -44,9 +106,13 @@
                 {
                     "start": 1730033090.2149384,
                     "end": 1730033121.3190455
+                },
+                {
+                    "start": 1730638958.4951653,
+                    "end": 1730639154.3525033
                 }
             ],
-            "completion": 1
+            "completion": 0
         },
         "Deluxe Ski Jumping 4": {
             "exe_path": "C:/Programy/Deluxe Ski Jump 4/DSJ4.exe",
@@ -56,15 +122,52 @@
                 "Sporty"
             ],
             "rating": null,
-            "play_time": 8.031504154205322,
-            "completion": 0,
-            "last_played": 1730047522.822404,
+            "play_time": 5601.020961999893,
+            "completion": 3,
+            "last_played": 1730761309.9742286,
             "play_sessions": [
                 {
                     "start": 1730047522.8254066,
                     "end": 1730047530.8569107
+                },
+                {
+                    "start": 1730060344.56643,
+                    "end": 1730062380.0109096
+                },
+                {
+                    "start": 1730067525.8055835,
+                    "end": 1730068641.5095212
+                },
+                {
+                    "start": 1730495315.0393646,
+                    "end": 1730495321.0760195
+                },
+                {
+                    "start": 1730496416.773345,
+                    "end": 1730496522.2178357
+                },
+                {
+                    "start": 1730497601.1330094,
+                    "end": 1730497607.1657233
+                },
+                {
+                    "start": 1730498332.4151213,
+                    "end": 1730500355.506251
+                },
+                {
+                    "start": 1730560919.6252637,
+                    "end": 1730560929.6658437
+                },
+                {
+                    "start": 1730713593.3430865,
+                    "end": 1730713754.0300405
+                },
+                {
+                    "start": 1730761309.9742286,
+                    "end": 1730761440.482746
                 }
-            ]
+            ],
+            "play_count": 2
         },
         "Red Dead Redemption 2": {
             "exe_path": "E:/2019/Red Dead Redemption 2/Launcher.exe",
@@ -81,10 +184,122 @@
                 "Strzelanki"
             ],
             "rating": 10.0,
-            "play_time": 0,
+            "play_time": 1305.1988537311554,
+            "completion": 14,
+            "last_played": 1731710788.2351923,
+            "play_sessions": [
+                {
+                    "start": 1730058547.8018794,
+                    "end": 1730058551.819811
+                },
+                {
+                    "start": 1731710707.716156,
+                    "end": 1731710762.9687843
+                },
+                {
+                    "start": 1731710788.2351923,
+                    "end": 1731712034.163486
+                }
+            ]
+        },
+        "PavlovVR": {
+            "exe_path": "G:/gry vr/PavlovVR/Pavlov/Binaries/Win64/Pavlov-Win64-Shipping.exe",
+            "save_path": "C:/Users/ASRock/AppData/Local/Pavlov",
+            "cover_image": "images\\PavlovVR_cover.jpg",
+            "genres": [
+                "VR"
+            ],
+            "rating": 8.0,
+            "last_played": 1730412796.6677797,
+            "play_time": 1182.5229308605194,
+            "play_sessions": [
+                {
+                    "start": 1730412796.6687799,
+                    "end": 1730413979.1917107
+                }
+            ],
+            "completion": 10
+        },
+        "Red Dead Redemption": {
+            "exe_path": "E:/2024/Red Dead Redemption/RDR.exe",
+            "save_path": "C:/Users/ASRock/AppData/Roaming/.1911/Red Dead Redemption",
+            "cover_image": "images\\Red Dead Redemption_cover.jpg",
+            "genres": [
+                "Strzelanki"
+            ],
+            "rating": 10.0,
+            "play_time": 159.6683065891266,
             "completion": 0,
-            "last_played": null,
-            "play_sessions": []
+            "last_played": 1731710678.4693413,
+            "play_sessions": [
+                {
+                    "start": 1730495268.2920763,
+                    "end": 1730495270.3044326
+                },
+                {
+                    "start": 1730495264.86434,
+                    "end": 1730495270.8924694
+                },
+                {
+                    "start": 1730495266.9174953,
+                    "end": 1730495270.9344687
+                },
+                {
+                    "start": 1730495274.9122636,
+                    "end": 1730495276.9248848
+                },
+                {
+                    "start": 1730495300.4377728,
+                    "end": 1730495302.4503372
+                },
+                {
+                    "start": 1730495350.0688474,
+                    "end": 1730495351.076458
+                },
+                {
+                    "start": 1730495395.340702,
+                    "end": 1730495397.358266
+                },
+                {
+                    "start": 1730497029.0264335,
+                    "end": 1730497159.5411634
+                },
+                {
+                    "start": 1730498257.0903308,
+                    "end": 1730498267.1360881
+                }
+            ],
+            "play_count": 1
+        },
+        "Silent Hill 2 Remake": {
+            "exe_path": "E:/2024/Silent Hill 2/SHProto.exe",
+            "save_path": "C:/Users/ASRock/AppData/Local/SilentHill2",
+            "cover_image": "images\\Silent Hill 2 Remake_cover.jpg",
+            "genres": [
+                "Strzelanki"
+            ],
+            "rating": 7.0,
+            "last_played": 1730498282.2055905,
+            "play_time": 104.49756622314453,
+            "play_sessions": [
+                {
+                    "start": 1730495540.1861074,
+                    "end": 1730495595.4677029
+                },
+                {
+                    "start": 1730497241.4889832,
+                    "end": 1730497255.5605533
+                },
+                {
+                    "start": 1730497244.748891,
+                    "end": 1730497259.8035946
+                },
+                {
+                    "start": 1730498282.2055905,
+                    "end": 1730498302.2952876
+                }
+            ],
+            "completion": 0
         }
     },
     "settings": {
@@ -95,12 +310,66 @@
         "custom_genres": [
             "Sporty",
             "RPG",
-            "Strzelanki"
-        ]
+            "Strzelanki",
+            "VR",
+            "Horror"
+        ],
+        "rss_feeds": [
+            {
+                "url": "https://feeds.ign.com/ign/games-all",
+                "active": false,
+                "name": "https://feeds.ign.com/ign/games-all"
+            },
+            {
+                "url": "https://steamcommunity.com/groups/lowcygier/rss/\n",
+                "active": true,
+                "name": "https://steamcommunity.com/groups/lowcygier/rss/\n"
+            }
+        ],
+        "news_post_limit": 20,
+        "enable_fps_monitoring": true,
+        "jezyk": "pl",
+        "autostart": true,
+        "language": "pl"
     },
     "groups": {},
     "user": {
         "username": "Maks",
-        "avatar": "C:/Users/ASRock/Downloads/fin_Hautamaeki.jpg"
-    }
+        "avatar": "images\\avatar.png"
+    },
+    "reminders": [],
+    "roadmap": [],
+    "performance_settings": {
+        "cpu_name": true,
+        "ram_info": true,
+        "gpu_info": true,
+        "fps": true,
+        "fps_measurement": true
+    },
+    "archive": [
+        {
+            "game_name": "High on Life",
+            "start_date": "2024-11-03",
+            "end_date": "2024-11-10",
+            "time_spent": 0,
+            "status": "Ukończona",
+            "completion_date": "2024-11-03"
+        },
+        {
+            "game_name": "Mafia Definitive Edition",
+            "start_date": "2024-11-04",
+            "end_date": "2024-11-17",
+            "time_spent": 0,
+            "status": "Ukończona",
+            "completion_date": "2024-11-04"
+        },
+        {
+            "game_name": "High on Life",
+            "start_date": "2024-11-03",
+            "end_date": "2024-11-10",
+            "time_spent": 141.35240387916565,
+            "status": "Ukończona",
+            "completion_date": "2024-11-15"
+        }
+    ]
 }
